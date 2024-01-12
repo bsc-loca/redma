@@ -1,0 +1,4 @@
+.simvision
+test/setup.tcl*
+test/tb_realigner_comp.f
+test/tb_redma_comp.f
