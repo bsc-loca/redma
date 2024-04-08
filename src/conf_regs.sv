@@ -196,7 +196,9 @@ module conf_regs #(
 
             DECODE_RADDR: begin
                 rresp <= 2'b00;
-                if (raddr == 6'h04) begin
+                if (raddr == 6'h00) begin
+                    rdata <= {8'h2D, 15'd0, write_zero, 8'd0};
+                end else if (raddr == 6'h04) begin
                     rdata <= {30'd0, writer_intr_en, reader_intr_en};
                 end else if (raddr == 6'hC) begin
                     rdata <= {30'd0, writer_intr_reg, reader_intr_reg};
@@ -225,6 +227,7 @@ module conf_regs #(
                 end else if (BTT_WIDTH > 96 && raddr == 6'h3C) begin
                     rdata <= btt_array[3];
                 end else begin
+                    rdata <= 32'h3BADADD2;
                     rresp <= 2'b10;
                 end
                 read_state <= R;
