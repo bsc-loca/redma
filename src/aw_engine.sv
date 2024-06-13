@@ -78,7 +78,7 @@ module aw_engine #(
         assign aw_chan.awaddr = AXI_ADDR_OFFSET | {{AXI_ADDR_WIDTH-INTERNAL_ADDR_WIDTH{1'b0}}, awaddr};
     end
     assign aw_chan.awlen = awlen;
-    assign aw_chan.awsize = 3'b100; //16 bytes
+    assign aw_chan.awsize = $clog2(AXI_DATA_WIDTH/8);
     assign aw_chan.awburst = 2'b01; //INCR
 
     assign new_transaction = state == SEND_AW && aw_chan.awready;

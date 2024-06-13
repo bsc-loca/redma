@@ -72,7 +72,7 @@ module ar_engine #(
         assign ar_chan.araddr = AXI_ADDR_OFFSET | {{AXI_ADDR_WIDTH-INTERNAL_ADDR_WIDTH{1'b0}}, araddr};
     end
     assign ar_chan.arlen = arlen;
-    assign ar_chan.arsize = 3'b100; //16 bytes
+    assign ar_chan.arsize = $clog2(AXI_DATA_WIDTH/8);
     assign ar_chan.arburst = 2'b01; //INCR
 
     assign new_transaction = state == SEND_AR && ar_chan.arready;
