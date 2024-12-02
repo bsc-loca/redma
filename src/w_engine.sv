@@ -39,7 +39,8 @@ module w_engine #(
     FIFO_READ.master data_fifo
 );
 
-    localparam LOW_ALIGN_BITS = $clog2(AXI_DATA_WIDTH/8);
+    localparam BYTES_PER_TRANSFER = AXI_DATA_WIDTH/8;
+    localparam int LOW_ALIGN_BITS = $clog2(BYTES_PER_TRANSFER);
     localparam TRANSFERS_WIDTH = BTT_WIDTH-LOW_ALIGN_BITS;
     localparam AXI_WSTRB_WIDTH = AXI_DATA_WIDTH/8;
 
@@ -64,6 +65,10 @@ module w_engine #(
     wire last;
 
     wire [BTT_WIDTH-1:0] actual_btt;
+
+    // SUPPORT FOR NON-POWER OF 2 DATA BUSES
+    logic [BTT_WIDTH-1:0] act_btt_div, act_btt_reminder;
+    logic [INTERNAL_ADDR_WIDTH-1:0] addr_div, addr_reminder;
 
     transaction_generator #(
         .AXI_DATA_WIDTH(AXI_DATA_WIDTH),
@@ -102,7 +107,15 @@ module w_engine #(
         wstrb[0] <= 1'b1;
     endfunction
 
-    assign actual_btt = btt + {{TRANSFERS_WIDTH{1'b0}}, start_addr[LOW_ALIGN_BITS-1:0]};
+    // SUPPORT FOR NON-POWER OF 2 DATA BUSES
+    assign act_btt_div =        actual_btt / BYTES_PER_TRANSFER;
+    assign act_btt_reminder =   actual_btt % BYTES_PER_TRANSFER;
+
+    localparam ACTUAL_ADDR_MASK = ~(gavina_addr_pkg::MEM_ADDR_MASK | gavina_addr_pkg::AXI_CORE_ADDR_MASK);
+    assign addr_div =           (start_addr & ACTUAL_ADDR_MASK) / BYTES_PER_TRANSFER;
+    assign addr_reminder =      (start_addr & ACTUAL_ADDR_MASK) % BYTES_PER_TRANSFER;
+
+    assign actual_btt = btt + addr_reminder;
 
     assign data_fifo.read = (state == COMPUTE_LEN_WSTRB && enable && !data_fifo.empty) || (state == SEND_W && w_chan.wready && !data_fifo.empty && cur_len != len) || (state == WAIT_FIFO && !data_fifo.empty);
 
@@ -120,9 +133,9 @@ module w_engine #(
         case (state)
 
             IDLE: begin
-                transfers_left <= actual_btt[BTT_WIDTH-1:LOW_ALIGN_BITS] + {{TRANSFERS_WIDTH-1{1'b0}}, (|actual_btt[LOW_ALIGN_BITS-1:0])};
-                last_alignment <= actual_btt[LOW_ALIGN_BITS-1:0];
-                first_alignment <= start_addr[LOW_ALIGN_BITS-1:0];
+                transfers_left <= act_btt_div + (act_btt_reminder>0);
+                last_alignment <= act_btt_reminder;
+                first_alignment <= addr_reminder;
                 first_burst <= 1'b1;
 
                 if (start) begin

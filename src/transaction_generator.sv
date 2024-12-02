@@ -35,12 +35,10 @@ module transaction_generator #(
 );
 
     localparam BYTES_PER_TRANSFER = AXI_DATA_WIDTH/8;
-    localparam LOW_ALIGN_BITS = $clog2(BYTES_PER_TRANSFER);
-    localparam HIGH_ALIGN_BITS = ADDR_WIDTH-LOW_ALIGN_BITS;
     localparam MAX_BYTES_PER_TRANSACTION = BYTES_PER_TRANSFER*(AXI_MAX_LEN+1);
     localparam HIGH_4K_ADDR_BITS = ADDR_WIDTH-12;
     localparam ADDR_4K_COMPARE_BITS = MAX_BYTES_PER_TRANSACTION < 4096 ? 1 : $clog2(MAX_BYTES_PER_TRANSACTION/4096 + 1);
-    localparam TRANSFERS_WIDTH = BTT_WIDTH-LOW_ALIGN_BITS;
+    localparam TRANSFERS_WIDTH = BTT_WIDTH;
 
     typedef enum bit [1:0] {
         IDLE,
@@ -50,7 +48,7 @@ module transaction_generator #(
 
     State_t state;
     reg [TRANSFERS_WIDTH-1:0] transfers_left;
-    reg [HIGH_ALIGN_BITS-1:0] aligned_addr;
+    reg [ADDR_WIDTH-1:0] aligned_addr;
 
     wire [8:0] transfers;
     wire [HIGH_4K_ADDR_BITS-1:0] next_4k_page;
@@ -61,25 +59,43 @@ module transaction_generator #(
 
     wire [BTT_WIDTH-1:0] actual_btt;
 
-    assign addr = {aligned_addr, {LOW_ALIGN_BITS{1'b0}}};
+    // SUPPORT FOR NON-POWER OF 2 DATA BUSES
+    logic [BTT_WIDTH-1:0] act_btt_div, act_btt_reminder;
+    logic [ADDR_WIDTH-1:0] addr_div, addr_reminder, addr_high, full_aligned_addr;
 
+    assign addr = full_aligned_addr;
     assign len_sig = transfers_left < AXI_MAX_LEN+1 ? transfers_left[7:0]-8'd1 : AXI_MAX_LEN[7:0];
-    assign len_4k_sig = addr[12+ADDR_4K_COMPARE_BITS-1:12] != last_transaction_addr[12+ADDR_4K_COMPARE_BITS-1:12] ?
-                            {next_4k_page, {12-LOW_ALIGN_BITS{1'b0}}} - addr[ADDR_WIDTH-1:LOW_ALIGN_BITS] - 8'd1 : AXI_MAX_LEN[7:0];
+
+    // assign len_4k_sig = addr[12+ADDR_4K_COMPARE_BITS-1:12] != last_transaction_addr[12+ADDR_4K_COMPARE_BITS-1:12] ?
+    //                         {next_4k_page, {12-LOW_ALIGN_BITS{1'b0}}} - addr[ADDR_WIDTH-1:LOW_ALIGN_BITS] - 8'd1 : AXI_MAX_LEN[7:0];
+    assign len_4k_sig = '1; // BYPASSED - Not needed for GAVINA
 
     assign last = transfers_left <= transfers;
     assign transfers = len + 8'd1;
-    assign actual_btt = btt + {{TRANSFERS_WIDTH{1'b0}}, start_addr[LOW_ALIGN_BITS-1:0]};
-    assign last_transaction_addr = {aligned_addr, {LOW_ALIGN_BITS{1'b0}}} + AXI_MAX_LEN*BYTES_PER_TRANSFER;
+    assign actual_btt = btt + addr_reminder;
+    assign last_transaction_addr = full_aligned_addr + AXI_MAX_LEN*BYTES_PER_TRANSFER;
     assign next_4k_page = addr[ADDR_WIDTH-1:12] + {{HIGH_4K_ADDR_BITS-1{1'b0}}, 1'b1};
+
+    // SUPPORT FOR NON-POWER OF 2 DATA BUSES
+    assign act_btt_div =        actual_btt / BYTES_PER_TRANSFER;
+    assign act_btt_reminder =   actual_btt % BYTES_PER_TRANSFER;
+
+    localparam ACTUAL_ADDR_MASK = ~(gavina_addr_pkg::MEM_ADDR_MASK | gavina_addr_pkg::AXI_CORE_ADDR_MASK);
+    assign addr_div =           (start_addr & ACTUAL_ADDR_MASK) / BYTES_PER_TRANSFER;
+    assign addr_reminder =      (start_addr & ACTUAL_ADDR_MASK) % BYTES_PER_TRANSFER;
+
+    // MSBs cannot be lost!!!!
+    assign addr_high = (start_addr & (~ACTUAL_ADDR_MASK));
+
+    assign full_aligned_addr = (aligned_addr*BYTES_PER_TRANSFER) | addr_high;
 
     always_ff @(posedge clk) begin
 
         case (state)
 
             IDLE: begin
-                aligned_addr <= start_addr[ADDR_WIDTH-1:LOW_ALIGN_BITS];
-                transfers_left <= actual_btt[BTT_WIDTH-1:LOW_ALIGN_BITS] + {{TRANSFERS_WIDTH-1{1'b0}}, (|actual_btt[LOW_ALIGN_BITS-1:0])};
+                aligned_addr <= addr_div;
+                transfers_left <= act_btt_div + (act_btt_reminder>0);
 
                 if (start) begin
                     state <= COMPUTE_TRANSACTION;

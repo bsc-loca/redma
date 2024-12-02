@@ -64,7 +64,7 @@ localparam N_CNT_BITS = $clog2(2*N_ELEMENTS+1);
 // Parameters double buffering
 logic [ADDR_WIDTH-1:0]  read_start_addr_q, read_start_addr_d;
 logic [ADDR_WIDTH-1:0]  write_start_addr_q, write_start_addr_d;
-logic [DATA_WIDTH-1:0]  btt_q, btt_d;
+logic [ADDR_WIDTH-1:0]  btt_q, btt_d;
 logic                   disable_realign_d, disable_realign_q;
 
 // {Source, destination} {initial, final} word offset in number of elements
@@ -72,7 +72,7 @@ logic [WOFFS_BITS-1:0]              src_woffs_init, src_woffs_end;
 logic [WOFFS_BITS-1:0]              dst_woffs_init, dst_woffs_end;
 
 // Intermediate signals
-logic [BYTE_CNT_BITS-1:0]           src_addr_end, dst_addr_end;
+logic [ADDR_WIDTH-1:0]              src_addr_end, dst_addr_end;
 
 // Interconnection control signals
 logic [N_CNT_BITS-1:0]                      elm_number;
@@ -114,6 +114,9 @@ logic [DATA_WIDTH-1:0] ping_obus, pong_obus;
 logic [15:0]        wdog_cnt_d, wdog_cnt_q;
 logic               wdog_force_finish;
 
+// SUPPORT FOR NON-POWER OF 2 DATA BUSES
+localparam ACTUAL_ADDR_MASK = ~(gavina_addr_pkg::MEM_ADDR_MASK | gavina_addr_pkg::AXI_CORE_ADDR_MASK);
+
 assign o_set_intr = done;
 assign start = reader_started_q & writer_started_q;
 
@@ -132,13 +135,13 @@ always_comb begin
     writer_started_d = writer_started_q;
 
     if (i_reader_start) begin
-        read_start_addr_d = i_read_start_addr;
+        read_start_addr_d = (i_read_start_addr & ACTUAL_ADDR_MASK);
         btt_d = i_btt;
         disable_realign_d = i_disable_realign;
         reader_started_d = 1'b1;
     end
     if (i_writer_start) begin
-        write_start_addr_d = i_write_start_addr;
+        write_start_addr_d = (i_write_start_addr & ACTUAL_ADDR_MASK);
         writer_started_d = 1'b1;
     end
     if (reader_started_q & writer_started_q) begin
@@ -307,9 +310,9 @@ always_comb begin
     // If realignment is not disabled
     if (!disable_realign_q) begin
 
-        // Initial word offsets
-        dst_woffs_init = write_start_addr_q[WOFFS_BITS+ELM_B_BITS-1:ELM_B_BITS];
-        src_woffs_init = read_start_addr_q[WOFFS_BITS+ELM_B_BITS-1:ELM_B_BITS];
+        // Initial word offsets -> MOD NEEDED TO SUPPORT NON-POWER OF 2 BUSES       
+        dst_woffs_init = (write_start_addr_q % N_ELEMENTS) << ELM_B_BITS;
+        src_woffs_init = (read_start_addr_q % N_ELEMENTS) << ELM_B_BITS;
 
         // Address end signals: sum of addr_init and BTT
         // dst_addr_end = write_start_addr_q + (btt_q-1);
@@ -317,7 +320,7 @@ always_comb begin
 
         // Word offset end signals
         // dst_woffs_end = dst_addr_end[WOFFS_BITS+ELM_B_BITS-1:ELM_B_BITS];
-        src_woffs_end = src_addr_end[WOFFS_BITS+ELM_B_BITS-1:ELM_B_BITS];
+        src_woffs_end = (src_addr_end % N_ELEMENTS) << ELM_B_BITS;
 
     end
 end
