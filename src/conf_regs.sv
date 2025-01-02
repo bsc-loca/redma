@@ -71,6 +71,13 @@ module conf_regs #(
     ReadState_t read_state;
     WriteState_t write_state;
 
+    // Internal registers to hold new state, which is only propagated after a START
+    reg [INTERNAL_RADDR_WIDTH-1:0] read_start_addr_int;
+    reg [INTERNAL_WADDR_WIDTH-1:0] write_start_addr_int;
+    reg [BTT_WIDTH-1:0] btt_int;
+    reg [INTERNAL_RADDR_WIDTH-1:0] reader_start_int;
+    reg [INTERNAL_WADDR_WIDTH-1:0] writer_start_int;
+
     reg reader_intr_en;
     reg writer_intr_en;
     reg reader_intr_reg;
@@ -103,25 +110,25 @@ module conf_regs #(
 
     for (genvar i = 0; i < INTERNAL_RADDR_WIDTH; i += 32) begin : RSTART_ADDR_ASSIGN
         if (i+32 > INTERNAL_RADDR_WIDTH) begin
-            assign rstart_addr_array[i/32] = {{32-INTERNAL_RADDR_WIDTH-i{1'b0}}, read_start_addr[INTERNAL_RADDR_WIDTH-1:i]};
+            assign rstart_addr_array[i/32] = {{32-INTERNAL_RADDR_WIDTH-i{1'b0}}, read_start_addr_int[INTERNAL_RADDR_WIDTH-1:i]};
         end else begin
-            assign rstart_addr_array[i/32] = read_start_addr[i +: 32];
+            assign rstart_addr_array[i/32] = read_start_addr_int[i +: 32];
         end
     end
 
     for (genvar i = 0; i < INTERNAL_WADDR_WIDTH; i += 32) begin : WSTART_ADDR_ASSIGN
         if (i+32 > INTERNAL_WADDR_WIDTH) begin
-            assign wstart_addr_array[i/32] = {{32-INTERNAL_WADDR_WIDTH-i{1'b0}}, write_start_addr[INTERNAL_WADDR_WIDTH-1:i]};
+            assign wstart_addr_array[i/32] = {{32-INTERNAL_WADDR_WIDTH-i{1'b0}}, write_start_addr_int[INTERNAL_WADDR_WIDTH-1:i]};
         end else begin
-            assign wstart_addr_array[i/32] = write_start_addr[i +: 32];
+            assign wstart_addr_array[i/32] = write_start_addr_int[i +: 32];
         end
     end
 
     for (genvar i = 0; i < BTT_WIDTH; i += 32) begin : BTT_ASSIGN
         if (i+32 > BTT_WIDTH) begin
-            assign btt_array[i/32] = {{32-BTT_WIDTH-i{1'b0}}, btt[BTT_WIDTH-1:i]};
+            assign btt_array[i/32] = {{32-BTT_WIDTH-i{1'b0}}, btt_int[BTT_WIDTH-1:i]};
         end else begin
-            assign btt_array[i/32] = btt[i +: 32];
+            assign btt_array[i/32] = btt_int[i +: 32];
         end
     end
 
@@ -129,13 +136,13 @@ module conf_regs #(
         if (i+32 > INTERNAL_RADDR_WIDTH) begin
             always_ff @(posedge clk) begin
                 if (write_state == W && io_control_w_wvalid && waddr == (6'h10 + (i/32)*4)) begin
-                    read_start_addr[INTERNAL_RADDR_WIDTH-1:i] <= (read_start_addr[INTERNAL_RADDR_WIDTH-1:i] & ~bit_wstrb[0 +: INTERNAL_RADDR_WIDTH-i]) | (io_control_w_wdata[0 +: INTERNAL_RADDR_WIDTH-i] & bit_wstrb[0 +: INTERNAL_RADDR_WIDTH-i]);
+                    read_start_addr_int[INTERNAL_RADDR_WIDTH-1:i] <= (read_start_addr_int[INTERNAL_RADDR_WIDTH-1:i] & ~bit_wstrb[0 +: INTERNAL_RADDR_WIDTH-i]) | (io_control_w_wdata[0 +: INTERNAL_RADDR_WIDTH-i] & bit_wstrb[0 +: INTERNAL_RADDR_WIDTH-i]);
                 end
             end
         end else begin
             always_ff @(posedge clk) begin
                 if (write_state == W && io_control_w_wvalid && waddr == (6'h10 + (i/32)*4)) begin
-                    read_start_addr[i +: 32] <= (read_start_addr[i +: 32] & ~bit_wstrb) | (io_control_w_wdata & bit_wstrb);
+                    read_start_addr_int[i +: 32] <= (read_start_addr_int[i +: 32] & ~bit_wstrb) | (io_control_w_wdata & bit_wstrb);
                 end
             end
         end
@@ -145,13 +152,13 @@ module conf_regs #(
         if (i+32 > INTERNAL_WADDR_WIDTH) begin
             always_ff @(posedge clk) begin
                 if (write_state == W && io_control_w_wvalid && waddr == (6'h20 + (i/32)*4)) begin
-                    write_start_addr[INTERNAL_WADDR_WIDTH-1:i] <= (write_start_addr[INTERNAL_WADDR_WIDTH-1:i] & ~bit_wstrb[0 +: INTERNAL_WADDR_WIDTH-i]) | (io_control_w_wdata[0 +: INTERNAL_WADDR_WIDTH-i] & bit_wstrb[0 +: INTERNAL_WADDR_WIDTH-i]);
+                    write_start_addr_int[INTERNAL_WADDR_WIDTH-1:i] <= (write_start_addr_int[INTERNAL_WADDR_WIDTH-1:i] & ~bit_wstrb[0 +: INTERNAL_WADDR_WIDTH-i]) | (io_control_w_wdata[0 +: INTERNAL_WADDR_WIDTH-i] & bit_wstrb[0 +: INTERNAL_WADDR_WIDTH-i]);
                 end
             end
         end else begin
             always_ff @(posedge clk) begin
                 if (write_state == W && io_control_w_wvalid && waddr == (6'h20 + (i/32)*4)) begin
-                    write_start_addr[i +: 32] <= (write_start_addr[i +: 32] & ~bit_wstrb) | (io_control_w_wdata & bit_wstrb);
+                    write_start_addr_int[i +: 32] <= (write_start_addr_int[i +: 32] & ~bit_wstrb) | (io_control_w_wdata & bit_wstrb);
                 end
             end
         end
@@ -161,13 +168,13 @@ module conf_regs #(
         if (i+32 > BTT_WIDTH) begin
             always_ff @(posedge clk) begin
                 if (write_state == W && io_control_w_wvalid && waddr == (6'h30 + (i/32)*4)) begin
-                    btt[BTT_WIDTH-1:i] <= (btt[BTT_WIDTH-1:i] & ~bit_wstrb[0 +: BTT_WIDTH-i]) | (io_control_w_wdata[0 +: BTT_WIDTH-i] & bit_wstrb[0 +: BTT_WIDTH-i]);
+                    btt_int[BTT_WIDTH-1:i] <= (btt_int[BTT_WIDTH-1:i] & ~bit_wstrb[0 +: BTT_WIDTH-i]) | (io_control_w_wdata[0 +: BTT_WIDTH-i] & bit_wstrb[0 +: BTT_WIDTH-i]);
                 end
             end
         end else begin
             always_ff @(posedge clk) begin
                 if (write_state == W && io_control_w_wvalid && waddr == (6'h30 + (i/32)*4)) begin
-                    btt[i +: 32] <= (btt[i +: 32] & ~bit_wstrb) | (io_control_w_wdata & bit_wstrb);
+                    btt_int[i +: 32] <= (btt_int[i +: 32] & ~bit_wstrb) | (io_control_w_wdata & bit_wstrb);
                 end
             end
         end
@@ -175,8 +182,8 @@ module conf_regs #(
 
     always_ff @(posedge clk) begin
 
-        reader_start <= 1'b0;
-        writer_start <= 1'b0;
+        reader_start_int <= 1'b0;
+        writer_start_int <= 1'b0;
 
         if (set_reader_intr) begin
             reader_intr_reg <= 1'b1;
@@ -254,8 +261,8 @@ module conf_regs #(
                 bresp <= 2'b00;
                 if (io_control_w_wvalid) begin
                     if (waddr == 6'h00) begin
-                        reader_start <= io_control_w_wdata[0] & bit_wstrb[0];
-                        writer_start <= io_control_w_wdata[1] & bit_wstrb[1];
+                        reader_start_int <= io_control_w_wdata[0] & bit_wstrb[0];
+                        writer_start_int <= io_control_w_wdata[1] & bit_wstrb[1];
                         write_zero <= io_control_w_wdata[8];
                     end else if (waddr == 6'h04) begin
                         reader_intr_en <= (reader_intr_en & ~bit_wstrb[0]) | (io_control_w_wdata[0] & bit_wstrb[0]);
@@ -301,6 +308,29 @@ module conf_regs #(
             writer_intr_en <= 1'b0;
             reader_intr_reg <= 1'b0;
             writer_intr_reg <= 1'b0;
+        end
+    end
+
+    // Propagation of registered values upon START
+    always_ff @(posedge clk) begin
+        writer_start <= writer_start_int;
+        if (writer_start_int) begin
+            write_start_addr <= write_start_addr_int;
+            btt <= btt_int;
+        end
+
+        reader_start <= reader_start_int;
+        if (reader_start_int) begin
+            read_start_addr <= read_start_addr_int;
+            btt <= btt_int;
+        end
+
+        if (!rstn) begin
+            btt <= '0;
+            read_start_addr <= '0;
+            write_start_addr <= '0;
+            writer_start <= '0;
+            reader_start <= '0;
         end
     end
 
