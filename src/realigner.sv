@@ -96,6 +96,7 @@ logic [0:N_ELEMENTS-1]                 ping_en_d, pong_en_d;
 logic [0:N_ELEMENTS-1][ELM_BITS-1:0]   ping_d, pong_d, ping_q, pong_q;
 
 // Control signals
+logic reader_start_q, writer_start_q;
 logic signed [BTT_WIDTH:0]   byte_cnt_d, byte_cnt_q;
 logic done;
 logic active_transfer_d, active_transfer_q;
@@ -113,6 +114,9 @@ logic [DATA_WIDTH-1:0] ping_obus, pong_obus;
 // Watchdg signals
 logic [15:0]        wdog_cnt_d, wdog_cnt_q;
 logic               wdog_force_finish;
+
+// FIFO write signal used only in bypass mode
+logic               bypass_wren_q;
 
 // SUPPORT FOR NON-POWER OF 2 DATA BUSES
 localparam ACTUAL_ADDR_MASK = ~(gavina_addr_pkg::MEM_ADDR_MASK | gavina_addr_pkg::AXI_CORE_ADDR_MASK);
@@ -134,13 +138,13 @@ always_comb begin
     reader_started_d = reader_started_q;
     writer_started_d = writer_started_q;
 
-    if (i_reader_start) begin
+    if (reader_start_q) begin
         read_start_addr_d = (i_read_start_addr & ACTUAL_ADDR_MASK);
         btt_d = i_btt;
         disable_realign_d = i_disable_realign;
         reader_started_d = 1'b1;
     end
-    if (i_writer_start) begin
+    if (writer_start_q) begin
         write_start_addr_d = (i_write_start_addr & ACTUAL_ADDR_MASK);
         writer_started_d = 1'b1;
     end
@@ -153,19 +157,25 @@ end
 // Register
 always_ff @(posedge i_clk or negedge i_rstn) begin : params_reg
     if(~i_rstn) begin
+        reader_start_q <= '0;
+        writer_start_q <= '0;
         btt_q <= '0;
         disable_realign_q <= '0;
         read_start_addr_q <= '0;
         write_start_addr_q <= '0;
         reader_started_q <= '0;
         writer_started_q <= '0;
+        bypass_wren_q <= '0;
     end else begin
+        reader_start_q <= i_reader_start;
+        writer_start_q <= i_writer_start;
         btt_q <= btt_d;
         disable_realign_q <= disable_realign_d;
         read_start_addr_q <= read_start_addr_d;
         write_start_addr_q <= write_start_addr_d;
         reader_started_q <= reader_started_d;
         writer_started_q <= writer_started_d;
+        bypass_wren_q <= (!reader_fifo.empty && !writer_fifo.full);
     end
 end
 
@@ -177,7 +187,7 @@ always_comb begin
 
     // Initialize values to bypass everything
     reader_fifo.read =   !reader_fifo.empty && !writer_fifo.full;
-    writer_fifo.write =  !reader_fifo.empty && !writer_fifo.full;
+    writer_fifo.write =  bypass_wren_q;
     writer_fifo.data =   reader_fifo.data;
 
     // If Realignment is enabled...
@@ -219,7 +229,7 @@ always_comb begin
     end
 
     // Start flag initializes byte counter to BTT
-    if (i_reader_start) begin
+    if (reader_start_q) begin
         byte_cnt_d = i_btt;
 
     // Every time we pop, we decrement the counter

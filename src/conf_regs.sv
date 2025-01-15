@@ -29,6 +29,7 @@ module conf_regs #(
     output reg [INTERNAL_WADDR_WIDTH-1:0] write_start_addr,
     output reg [BTT_WIDTH-1:0] btt,
     output reg write_zero,
+    output reg disable_realign,
     output reg reader_start,
     output reg writer_start,
     output reader_intr,
@@ -204,7 +205,7 @@ module conf_regs #(
             DECODE_RADDR: begin
                 rresp <= 2'b00;
                 if (raddr == 6'h00) begin
-                    rdata <= {8'h2D, 15'd0, write_zero, 8'd0};
+                    rdata <= {8'h2D, 14'd0, disable_realign, write_zero, 8'd0};
                 end else if (raddr == 6'h04) begin
                     rdata <= {30'd0, writer_intr_en, reader_intr_en};
                 end else if (raddr == 6'hC) begin
@@ -264,6 +265,7 @@ module conf_regs #(
                         reader_start_int <= io_control_w_wdata[0] & bit_wstrb[0];
                         writer_start_int <= io_control_w_wdata[1] & bit_wstrb[1];
                         write_zero <= io_control_w_wdata[8];
+                        disable_realign <= io_control_w_wdata[9];
                     end else if (waddr == 6'h04) begin
                         reader_intr_en <= (reader_intr_en & ~bit_wstrb[0]) | (io_control_w_wdata[0] & bit_wstrb[0]);
                         writer_intr_en <= (writer_intr_en & ~bit_wstrb[1]) | (io_control_w_wdata[1] & bit_wstrb[1]);

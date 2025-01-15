@@ -262,6 +262,7 @@ module redma_top #(
         .write_start_addr(write_start_addr),
         .btt(btt),
         .write_zero(write_zero),
+        .disable_realign(disable_realign),
         .reader_start(reader_start),
         .writer_start(writer_start),
         .io_control_aw_awaddr(io_control_aw_awaddr),
@@ -332,7 +333,7 @@ module redma_top #(
         .i_read_start_addr(read_start_addr),
         .i_write_start_addr(write_start_addr),
         .i_btt(btt),
-        .i_disable_realign(1'b0),
+        .i_disable_realign(disable_realign),
         .o_set_intr(set_reader_intr),
         .reader_fifo(reader_fifo_read),
         .writer_fifo(writer_fifo_write)
