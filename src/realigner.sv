@@ -415,23 +415,27 @@ always_comb begin
     // Registers Used Index -> Look for 1 crossing in regs_active_q
     regs_used_idx = 0;
 
-    for (integer i=1; i<N_BUFS_TOTAL; i++) begin
-        // When current location is 0 and previous location was 1, we take index
-        if ((!regs_active_q[i]) && regs_active_q[i-1]) begin
-            regs_used_idx = i;
+    // If realignment is not disabled
+    if (!disable_realign_q) begin
+
+        for (integer i=1; i<N_BUFS_TOTAL; i++) begin
+            // When current location is 0 and previous location was 1, we take index
+            if ((!regs_active_q[i]) && regs_active_q[i-1]) begin
+                regs_used_idx = i;
+            end
         end
-    end
 
-    // New Active Index -> Last index of values to be written
-    new_active_idx = regs_used_idx + elm_number;
+        // New Active Index -> Last index of values to be written
+        new_active_idx = regs_used_idx + elm_number;
 
-    // Regs Active New -> Marks positions to be written to
-    regs_active_new = 0;
+        // Regs Active New -> Marks positions to be written to
+        regs_active_new = 0;
 
-    for (integer b=0; b<N_BUFS_TOTAL; b++) begin
-        // Set bits to 1 between Registers Used Index and New Active Index
-        if ((b>=regs_used_idx) && (b<new_active_idx)) begin
-            regs_active_new[b] = 1'b1;
+        for (integer b=0; b<N_BUFS_TOTAL; b++) begin
+            // Set bits to 1 between Registers Used Index and New Active Index
+            if ((b>=regs_used_idx) && (b<new_active_idx)) begin
+                regs_active_new[b] = 1'b1;
+            end
         end
     end
 end
@@ -446,38 +450,42 @@ always_comb begin
     regs_en_d = 0;
     regs_active_d = regs_active_q;
 
-    // If idle, free all registers
-    if (!active_transfer_q) begin
-        regs_active_d = '0;
+    // If realignment is not disabled
+    if (!disable_realign_q) begin
 
-    // On first word
-    end else if (first_word_q) begin
+        // If idle, free all registers
+        if (!active_transfer_q) begin
+            regs_active_d = '0;
 
-        // Clear registers by default
-        regs_active_d = '0;
+        // On first word
+        end else if (first_word_q) begin
 
-        // Mark first dst_woffs_init positions as active to not write them
-        for (integer i=0; i<N_ELEMENTS; i++) begin
-            if (i<dst_woffs_init) begin
-                regs_active_d[i] = 1'b1;
+            // Clear registers by default
+            regs_active_d = '0;
+
+            // Mark first dst_woffs_init positions as active to not write them
+            for (integer i=0; i<N_ELEMENTS; i++) begin
+                if (i<dst_woffs_init) begin
+                    regs_active_d[i] = 1'b1;
+                end
             end
         end
-    end
 
-    // Push forces all positions to zero on (previous) selected buff
-    if (push) begin
-        regs_active_d[N_ELEMENTS:N_BUFS_TOTAL-1] = 0;
-    end
+        // Push forces all positions to zero on (previous) selected buff
+        if (push) begin
+            regs_active_d[N_ELEMENTS:N_BUFS_TOTAL-1] = 0;
+        end
 
-    // Normal operation => Enabled by popping data, delayed 1 shimming cycle; Disabled by FIFO Full
-    if (pop_shim_q && (!writer_fifo.full)) begin
+        // Normal operation => Enabled by popping data, delayed 1 shimming cycle; Disabled by FIFO Full
+        if (pop_shim_q && (!writer_fifo.full)) begin
 
-        // Registers Enable values have been computed already as regs_active_new
-        regs_en_d = regs_active_new;
+            // Registers Enable values have been computed already as regs_active_new
+            regs_en_d = regs_active_new;
 
-        // New Active Registers achieved by simpli ORing the old and the new
-        regs_active_d = regs_active_d | regs_active_new;
+            // New Active Registers achieved by simpli ORing the old and the new
+            regs_active_d = regs_active_d | regs_active_new;
 
+        end
     end
 end
 
@@ -617,7 +625,7 @@ assign push = (regs_push | done) & active_transfer_q;
 // ------------------------
 
 // Transition after push
-assign buffer_select_d = (push) ? (!buffer_select_q) : buffer_select_q;
+assign buffer_select_d = (push && (!disable_realign_q)) ? (!buffer_select_q) : buffer_select_q;
 
 always_ff @(posedge i_clk or negedge i_rstn) begin : buffsel_reg
     if(~i_rstn) begin

@@ -310,6 +310,8 @@ module conf_regs #(
             writer_intr_en <= 1'b0;
             reader_intr_reg <= 1'b0;
             writer_intr_reg <= 1'b0;
+            write_zero <= 1'b0;
+            disable_realign <= 1'b0;
         end
     end
 
