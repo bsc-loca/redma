@@ -65,7 +65,7 @@ localparam N_CNT_BITS = $clog2(2*N_ELEMENTS+1);
 logic [ADDR_WIDTH-1:0]  read_start_addr_q, read_start_addr_d;
 logic [ADDR_WIDTH-1:0]  write_start_addr_q, write_start_addr_d;
 logic [ADDR_WIDTH-1:0]  btt_q, btt_d;
-logic                   disable_realign_d, disable_realign_q;
+logic                   disable_realign_q;
 
 // {Source, destination} {initial, final} word offset in number of elements
 logic [WOFFS_BITS-1:0]              src_woffs_init, src_woffs_end;
@@ -134,14 +134,12 @@ always_comb begin
     read_start_addr_d = read_start_addr_q;
     write_start_addr_d = write_start_addr_q;
     btt_d = btt_q;
-    disable_realign_d = disable_realign_q;
     reader_started_d = reader_started_q;
     writer_started_d = writer_started_q;
 
     if (reader_start_q) begin
         read_start_addr_d = (i_read_start_addr & ACTUAL_ADDR_MASK);
         btt_d = i_btt;
-        disable_realign_d = i_disable_realign;
         reader_started_d = 1'b1;
     end
     if (writer_start_q) begin
@@ -170,7 +168,7 @@ always_ff @(posedge i_clk or negedge i_rstn) begin : params_reg
         reader_start_q <= i_reader_start;
         writer_start_q <= i_writer_start;
         btt_q <= btt_d;
-        disable_realign_q <= disable_realign_d;
+        disable_realign_q <= i_disable_realign;     // Does not need 2 buffering - it can only change when START is given
         read_start_addr_q <= read_start_addr_d;
         write_start_addr_q <= write_start_addr_d;
         reader_started_q <= reader_started_d;
