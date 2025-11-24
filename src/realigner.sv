@@ -51,7 +51,6 @@ localparam N_BUFS_TOTAL = 2*N_ELEMENTS;
 localparam WOFFS_BITS = $clog2(N_ELEMENTS);
 localparam BYTE = 8;
 localparam AXI_BYTE_NUM = DATA_WIDTH/BYTE;
-localparam BYTE_CNT_BITS = $clog2(256*AXI_BYTE_NUM);
 
 localparam ELM_BYTES = ELM_BITS/BYTE;
 localparam ELM_B_BITS = $clog2(ELM_BYTES);
@@ -64,7 +63,7 @@ localparam N_CNT_BITS = $clog2(2*N_ELEMENTS+1);
 // Parameters double buffering
 logic [ADDR_WIDTH-1:0]  read_start_addr_q, read_start_addr_d;
 logic [ADDR_WIDTH-1:0]  write_start_addr_q, write_start_addr_d;
-logic [DATA_WIDTH-1:0]  btt_q, btt_d;
+logic [BTT_WIDTH-1:0]   btt_q, btt_d;
 logic                   disable_realign_d, disable_realign_q;
 
 // {Source, destination} {initial, final} word offset in number of elements
@@ -72,7 +71,7 @@ logic [WOFFS_BITS-1:0]              src_woffs_init, src_woffs_end;
 logic [WOFFS_BITS-1:0]              dst_woffs_init, dst_woffs_end;
 
 // Intermediate signals
-logic [BYTE_CNT_BITS-1:0]           src_addr_end, dst_addr_end;
+logic [ADDR_WIDTH-1:0]                      src_addr_end, dst_addr_end;
 
 // Interconnection control signals
 logic [N_CNT_BITS-1:0]                      elm_number;
